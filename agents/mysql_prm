@@ -63,6 +63,12 @@
 #######################################################################
 # Initialization:
 
+# : ${OCF_ROOT=/usr/lib/ocf}
+# : ${OCF_RESOURCE_INSTANCE=p_mysql}
+# : ${MYSQLBINLOG=/maria/bin/mysqlbinlog}
+
+  OCF_ROOT="/usr/lib/ocf"
+
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
 . ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
 
@@ -80,14 +86,18 @@ if [ "X${HOSTOS}" = "XOpenBSD" ];then
    OCF_RESKEY_pid_default="/var/mysql/mysqld.pid"
    OCF_RESKEY_socket_default="/var/run/mysql/mysql.sock"
 else
-   OCF_RESKEY_binary_default="/usr/sbin/mysqld"
-   OCF_RESKEY_config_default="/etc/my.cnf"
-   OCF_RESKEY_datadir_default="/var/lib/mysql"
+   OCF_RESKEY_binary_default="/maria/bin/mysqld"
+   OCF_RESKEY_config_default="/maria/my.cnf"
+   OCF_RESKEY_datadir_default="/maria/data"
    OCF_RESKEY_user_default="mysql"
-   OCF_RESKEY_group_default="mysql"
+   OCF_RESKEY_group_default="dba"
    OCF_RESKEY_log_default="/var/log/mysqld.log"
-   OCF_RESKEY_pid_default="/var/run/mysql/mysqld.pid"
-   OCF_RESKEY_socket_default="/var/lib/mysql/mysql.sock"
+   OCF_RESKEY_pid_default="/maria/data/mysqld.pid"
+   OCF_RESKEY_socket_default="/maria/data/mysqld.sock"
+
+   OCF_ROOT="/usr/lib/ocf"
+   OCF_RESOURCE_INSTANCE="p_mysql"
+   MYSQLBINLOG="/maria/bin/mysqlbinlog"
 fi
 
 OCF_RESKEY_client_binary_default="mysql"
@@ -154,7 +164,8 @@ else
 fi
 
 MYSQL="$TIMEOUT $MYSQL"
-MYSQLBINLOG=`which mysqlbinlog 2> /dev/null`
+#MYSQLBINLOG=`which mysqlbinlog 2> /dev/null`
+MYSQLBINLOG="/maria/bin/mysqlbinlog"
 MYSQL_BINDIR=`dirname ${OCF_RESKEY_client_binary}`
 
 MYSQL_OPTIONS_LOCAL="-A -S $OCF_RESKEY_socket --connect_timeout=10"
@@ -1138,6 +1149,8 @@ unset_master(){
    local Iter=5
    while [ "$Iter" -gt 0 ]; do
       master_status_attr=`$CRM_ATTR_REPL_STATUS --query`
+      #master_status_attr=`/usr/sbin/crm_attribute --type crm_config --name p_mysql_REPL_STATUS -s mysql_replication -q --query`
+      #master_status_attr=`mysql_run -Q -sw -O $MYSQL -A -S /maria/data/mysqld.sock --connect_timeout=10 --user=root --password=root01 -e \"SHOW SLAVE STATUS\"`
       if [ "$?" -eq 0 ]; then
          break;
       else
@@ -1266,8 +1279,10 @@ get_reader_attr() {
 update_data_master_status() {
    
    master_status_file="${HA_RSCTMP}/master_status.${OCF_RESOURCE_INSTANCE}"
-   
+
    mysql_run -Q -sw -O $MYSQL $MYSQL_OPTIONS_REPL -e "SHOW MASTER STATUS\G" > $master_status_file
+
+   cp "${HA_RSCTMP}/master_status.${OCF_RESOURCE_INSTANCE}" /root/ryunewquery.txt
 }
 
 
@@ -1300,7 +1315,7 @@ check_datadir_state() {
    # Get the free space of the binlogdir
    FREE_SPC_PCT=`/bin/df $OCF_RESKEY_datadir | /bin/grep -v Filesystem \
                         | /bin/sed  -e 's/ \+/ /g' | /usr/bin/cut -d' ' -f 5 \
-                        | /usr/bin/tr -d '%'`
+                        | /usr/bin/tr -d '%' | tail -n 1`
 
    if [ "$FREE_SPC_PCT" -ge "97" ]; then
       ocf_log warn "Partition $OCF_RESKEY_datadir usage is at " \
@@ -1341,7 +1356,103 @@ mysql_validate() {
       ocf_log err "Group $OCF_RESKEY_group doesn't exist";
       return $OCF_ERR_INSTALLED;
    fi
-   
+  
+echo OCF_ROOT : $OCF_ROOT
+echo OCF_FUNCTIONS_DIR : $OCF_FUNCTIONS_DIR
+echo HOSTOS : $HOSTOS
+echo OCF_RESKEY_binary_default : $OCF_RESKEY_binary_default
+echo OCF_RESKEY_config_default : $OCF_RESKEY_config_default
+echo OCF_RESKEY_datadir_default : $OCF_RESKEY_datadir_default
+echo OCF_RESKEY_user_default : $OCF_RESKEY_user_default
+echo OCF_RESKEY_group_default : $OCF_RESKEY_group_default
+echo OCF_RESKEY_log_default : $OCF_RESKEY_log_default
+echo OCF_RESKEY_pid_default : $OCF_RESKEY_pid_default
+echo OCF_RESKEY_socket_default : $OCF_RESKEY_socket_default
+echo OCF_ROOT : $OCF_ROOT
+echo OCF_RESOURCE_INSTANCE : $OCF_RESOURCE_INSTANCE
+echo MYSQLBINLOG : $MYSQLBINLOG
+echo OCF_RESKEY_client_binary_default : $OCF_RESKEY_client_binary_default
+echo OCF_RESKEY_client_binary_default : $OCF_RESKEY_client_binary_default
+echo OCF_RESKEY_binary_prefix_default : $OCF_RESKEY_binary_prefix_default
+echo OCF_RESKEY_test_user_default : $OCF_RESKEY_test_user_default
+echo OCF_RESKEY_test_table_default : $OCF_RESKEY_test_table_default
+echo OCF_RESKEY_test_passwd_default : $OCF_RESKEY_test_passwd_default
+echo OCF_RESKEY_enable_creation_default : $OCF_RESKEY_enable_creation_default
+echo OCF_RESKEY_additional_parameters_default : $OCF_RESKEY_additional_parameters_default
+echo OCF_RESKEY_replication_port_default : $OCF_RESKEY_replication_port_default
+echo OCF_RESKEY_max_slave_lag_default : $OCF_RESKEY_max_slave_lag_default
+echo OCF_RESKEY_evict_outdated_slaves_default : $OCF_RESKEY_evict_outdated_slaves_default
+echo OCF_RESKEY_reader_attribute_default : $OCF_RESKEY_reader_attribute_default
+echo OCF_RESKEY_reader_failcount_default : $OCF_RESKEY_reader_failcount_default
+echo OCF_RESKEY_backup_lockfile_default : $OCF_RESKEY_backup_lockfile_default
+echo OCF_RESKEY_booth_master_ticket_default : $OCF_RESKEY_booth_master_ticket_default
+echo OCF_RESKEY_async_stop_default : $OCF_RESKEY_async_stop_default
+echo OCF_RESKEY_try_restart_crashed_master_default : $OCF_RESKEY_try_restart_crashed_master_default
+echo OCF_RESKEY_binary : $OCF_RESKEY_binary
+echo MYSQL_SBINDIR : $MYSQL_SBINDIR
+echo OCF_RESKEY_binary_prefix : $OCF_RESKEY_binary_prefix
+echo OCF_RESKEY_client_binary : $OCF_RESKEY_client_binary
+echo OCF_RESKEY_config : $OCF_RESKEY_config
+echo OCF_RESKEY_datadir : $OCF_RESKEY_datadir
+echo OCF_RESKEY_user : $OCF_RESKEY_user
+echo OCF_RESKEY_group : $OCF_RESKEY_group
+echo OCF_RESKEY_log : $OCF_RESKEY_log
+echo OCF_RESKEY_pid : $OCF_RESKEY_pid
+echo OCF_RESKEY_socket : $OCF_RESKEY_socket
+echo OCF_RESKEY_test_user : $OCF_RESKEY_test_user
+echo OCF_RESKEY_test_table : $OCF_RESKEY_test_table
+echo OCF_RESKEY_test_passwd : $OCF_RESKEY_test_passwd
+echo OCF_RESKEY_enable_creation : $OCF_RESKEY_enable_creation
+echo OCF_RESKEY_additional_parameters : $OCF_RESKEY_additional_parameters
+echo OCF_RESKEY_replication_user : $OCF_RESKEY_replication_user
+echo OCF_RESKEY_replication_passwd : $OCF_RESKEY_replication_passwd
+echo OCF_RESKEY_replication_port : $OCF_RESKEY_replication_port
+echo OCF_RESKEY_replication_options : $OCF_RESKEY_replication_options
+echo OCF_RESKEY_max_slave_lag : $OCF_RESKEY_max_slave_lag
+echo OCF_RESKEY_evict_outdated_slaves : $OCF_RESKEY_evict_outdated_slaves
+echo OCF_RESKEY_reader_attribute : $OCF_RESKEY_reader_attribute
+echo OCF_RESKEY_reader_failcount : $OCF_RESKEY_reader_failcount
+echo OCF_RESKEY_backup_lockfile : $OCF_RESKEY_backup_lockfile
+echo OCF_RESKEY_geo_remote_IP} : $OCF_RESKEY_geo_remote_IP}
+echo OCF_RESKEY_backup_lockfile : $OCF_RESKEY_backup_lockfile
+echo OCF_RESKEY_geo_remote_IP} : $OCF_RESKEY_geo_remote_IP}
+echo OCF_RESKEY_geo_remote_user} : $OCF_RESKEY_geo_remote_user}
+echo OCF_RESKEY_geo_remote_opts} : $OCF_RESKEY_geo_remote_opts}
+echo OCF_RESKEY_booth_master_ticket} : $OCF_RESKEY_booth_master_ticket}
+echo OCF_RESKEY_post_promote_script} : $OCF_RESKEY_post_promote_script}
+echo OCF_RESKEY_prm_binlog_parser_path : $OCF_RESKEY_prm_binlog_parser_path
+echo OCF_RESKEY_async_stop : $OCF_RESKEY_async_stop
+echo OCF_RESKEY_try_restart_crashed_master : $OCF_RESKEY_try_restart_crashed_master
+echo MYSQL : $MYSQL
+echo TIMEOUT : $TIMEOUT
+echo MYSQL : $MYSQL
+echo MYSQLBINLOG : $MYSQLBINLOG
+echo MYSQL_BINDIR : $MYSQL_BINDIR
+echo MYSQL_OPTIONS_LOCAL : $MYSQL_OPTIONS_LOCAL
+echo MYSQL_OPTIONS_REPL : $MYSQL_OPTIONS_REPL
+echo MYSQL_OPTIONS_TEST : $MYSQL_OPTIONS_TEST
+echo MYSQL_LAST_ERR : $MYSQL_LAST_ERR
+echo MYSQL_TOO_MANY_CONN_ERR : $MYSQL_TOO_MANY_CONN_ERR
+echo CRM_MASTER : $CRM_MASTER
+echo HOSTNAME : $HOSTNAME
+echo CRM_ATTR : $CRM_ATTR
+echo INSTANCE_ATTR_NAME : $INSTANCE_ATTR_NAME
+echo CRM_ATTR_REPL_INFO : $CRM_ATTR_REPL_INFO
+echo CRM_ATTR_REPL_STATUS : $CRM_ATTR_REPL_STATUS
+echo CRM_ATTR_LAST_TRX : $CRM_ATTR_LAST_TRX
+echo CRM_ATTR_MASTER_CRASHED_TS : $CRM_ATTR_MASTER_CRASHED_TS
+echo CRM_ATTR_NODE_LAST_TRX_MD5 : $CRM_ATTR_NODE_LAST_TRX_MD5
+echo CRM_ATTR_MASTER_CRASHED_TS : $CRM_ATTR_MASTER_CRASHED_TS
+echo CRM_ATTR_NODE_LAST_TRX_MD5 : $CRM_ATTR_NODE_LAST_TRX_MD5
+echo CRM_RES : $CRM_RES
+echo CRM_TICKET : $CRM_TICKET
+echo SSH : $SSH
+echo MAX_BINLOG_SIZE_CACHE : $MAX_BINLOG_SIZE_CACHE
+echo ASYNC_STOP_WITNESS_FILE : $ASYNC_STOP_WITNESS_FILE
+echo OCF_STOPPING : $OCF_STOPPING
+echo HA_RSCTMP : $HA_RSCTMP
+
+ 
    true
 }
 
@@ -1423,7 +1534,7 @@ mysql_status() {
             last_crash_ts=`$CRM_ATTR -l reboot --name ${INSTANCE_ATTR_NAME}_last_crash --query -q --default=0`
             
             if [ "$last_crash_ts" -ne "0" ]; then
-               if [ `date +%s` -lt "$((${last_crash_ts}+3600))" ]; then
+               if [ `date +%s` -lt "$((${last_crash_ts}+60))" ]; then
                   # too soon, multiple crash, let's error out
                   set_master_score 0
                   return $OCF_NOT_RUNNING
@@ -1492,7 +1603,7 @@ mysql_monitor() {
             master_status_attr=`$CRM_ATTR_REPL_STATUS --query  -q`
             new_master_status_attr="$(get_master_status File)|$(get_master_status Position)|$(get_max_binlog_size)"
             rm -f $master_status_file
-            if [ "$master_status_attr" != "$new_master_status_attr" ]; then
+            if [ "$master_status_attr" != "$new_master_status_attr" -a "$new_master_status_attr" != "||1073741824" ]; then
                # Doing in bg, no need to wait and that can hang if a node is lost at the same time
                $CRM_ATTR_REPL_STATUS -v "$new_master_status_attr" &
             fi
@@ -1782,7 +1893,12 @@ mysql_stop() {
    fi
    
    pid=`cat ${OCF_RESKEY_pid}.starting 2> /dev/null`
-   /bin/kill $pid > /dev/null
+
+   rstmp=`ps -Al | grep mysqld | wc -l`
+   if [ "$rstmp" -gt "0" ]; then
+      /bin/kill $pid > /dev/null
+   fi
+
    rc=$?
    if [ $rc != 0 ]; then
       ocf_log err "MySQL couldn't be stopped"
