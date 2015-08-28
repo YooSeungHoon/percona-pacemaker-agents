@@ -1,0 +1,109 @@
+================
+PACEMAKER & COROSYNC CONFIG
+====================
+
+yum install pacemaker corosync cman resource-agent pcs crmsh 	
+
+
+vi /etc/hosts
+
+
+while /bin/true; do dd if=/dev/urandom of=/tmp/100 bs=1024 count=100000; for i in {1..10}; do cp /tmp/100 /tmp/tmp_$i_$RANDOM; done; rm -f /tmp/tmp_* /tmp/100; done & /usr/sbin/corosync-keygen
+
+
+scp authkey ...
+
+
+sed -i.sed "s/.*CMAN_QUORUM_TIMEOUT=.*/CMAN_QUORUM_TIMEOUT=0/g" /etc/sysconfig/cman
+
+
+ccs -f /etc/cluster/cluster.conf --createcluster pg_cluster
+
+
+ccs -f /etc/cluster/cluster.conf --addnode DB1
+...
+
+ccs -f /etc/cluster/cluster.conf --addmethod pcmk-redirect DB1
+...
+
+ccs -f /etc/cluster/cluster.conf --addfencedev pcmk agent=fence_pcmk
+
+ccs -f /etc/cluster/cluster.conf --addfenceinst pcmk DB1 pcmk-redirect port=DB1
+...
+
+ccs -f /etc/cluster/cluster.conf --setcman keyfile="/etc/corosync/authkey" transport="udpu"
+
+ccs_config_validate -f /etc/cluster/cluster.conf
+
+
+============================
+PACEMAKER RESOURCE MANAGER BASIC
+============================
+primitive p_mysql ocf:heartbeat:mysql \
+  params binary="/usr/sbin/mysqld" \
+  op start timeout="120" \
+  op stop timeout="120" \
+  op promote timeout="120" \
+  op demote timeout="120" \
+  op monitor role="Master" timeout="30" interval="10" \
+  op monitor role="Slave" timeout="30" interval="10"
+ms ms_mysql p_mysql \
+  meta clone-max=3
+
+pcs resource create p_maria mysql params config=/maria/my.cnf client_binary=/maria/bin/mysql datadir=/maria/data pid=/maria/data/mysqld.pid socket=/maria/data/mysqld.sock replication_user=root replication_passwd=root01 user=mysql group=dba  max_slave_lag=60 evict_outdated_slaves=false binary=/maria/bin/mysqld test_user=root test_passwd=root01 log=/maria/data/mysqld.err \
+  op start timeout="120" \
+  op stop timeout="120" \
+  op promote timeout="120" \
+  op demote timeout="120" \
+  op monitor role="Master" timeout="30" interval="10" \
+  op monitor role="Slave" timeout="30" interval="10"
+
+
+pcs resource master ms_MySQL p_maria
+pcs resource update ms_MySQL master-max="1" master-node-max="1" clone-max="2" clone-node-max="1" notify="true" globally-unique="false" target-role="Master" is-managed="true"
+
+ pcs resource op add p_maria monitor interval="10s" role="Master" OCF_CHECK_LEVEL="1" on-fail="standby"
+
+pcs resource op add p_maria monitor interval="2s" role="Slave" OCF_CHECK_LEVEL="1" on-fail="restart"
+
+pcs resource create writer_vip ocf:heartbeat:IPaddr2 \
+      ip="192.168.100.185" nic="eth0" \
+      op monitor interval="10s"
+
+pcs constraint colocation add  master  ms_MySQL with writer_vip
+
+pcs constraint order promote ms_MySQL then start writer_vip
+
+================================================================
+PERCONA 
+================================================================
+primitive p_mysql ocf:percona:mysql \
+      params config="/etc/my.cnf" pid="/var/lib/mysql/mysqld.pid" socket="/var/run/mysqld/mysqld.sock" replication_user="repl_user" \
+             replication_passwd="ola5P1ZMU" max_slave_lag="60" evict_outdated_slaves="false" binary="/usr/libexec/mysqld" \
+             test_user="test_user" test_passwd="2JcXCxKF" \
+      op monitor interval="5s" role="Master" OCF_CHECK_LEVEL="1" \
+      op monitor interval="2s" role="Slave" OCF_CHECK_LEVEL="1" \
+      op start interval="0" timeout="60s" \
+      op stop interval="0" timeout="60s"
+
+
+pcs resource create reader_vip_1 ocf:heartbeat:IPaddr2 \
+      ip="172.30.222.101" nic="eth1" \
+      op monitor interval="10s"
+pcs resource create reader_vip_2 ocf:heartbeat:IPaddr2 \
+      ip="172.30.222.102" nic="eth1" \
+      op monitor interval="10s"
+pcs resource create writer_vip ocf:heartbeat:IPaddr2 \
+      ip="172.30.222.100" nic="eth1" \
+      op monitor interval="10s"
+
+
+ms ms_MySQL p_mysql \
+     meta master-max="1" master-node-max="1" clone-max="2" clone-node-max="1" notify="true" globally-unique="false" target-role="Master" is-managed="true"
+
+
+pcs resource update p_mysql   --master master-max="1" master-node-max="1" clone-max="2" clone-node-max="1" notify="true" globally-unique="false" target-role="Master" is-managed="true"
+pcs resource master ms_MySQL p_mysql
+pcs constraint colocation add  master  ms_MySQL with writer_vip
+pcs resource op add  p_mysql monitor interval="5s" role="Master" OCF_CHECK_LEVEL="1"
+pcs resource op add  p_mysql monitor interval="2s" role="Slave" OCF_CHECK_LEVEL="1"
