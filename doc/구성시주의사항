@@ -1,0 +1,7 @@
+ ============================================================================
+ 1. replication user 의 passwd는 @,! 등 특수기호가 배재되어야함
+ 2. replication user는 SUPER, REPLICATION SLAVE, REPLICATION CLIENT, PROCESS, RELOAD 권한이 있어야함
+ 3. replication user는 localhost 로 host정보를 등록하며, 추가로 상대편 ip대역이 등록되어야한다
+   (localhost : pacemaker가 read_only, show slave status를 사용시 'repl'@'localhost' 방식으로 접속한다
+    relica ip대역 : change master 수행시 관련 host정보가 필요하다 ex) 10.127.4.%)
+ ============================================================================
