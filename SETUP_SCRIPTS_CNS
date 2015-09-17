@@ -72,6 +72,7 @@ pcs resource create writer_vip ocf:heartbeat:IPaddr2 \
 
 pcs constraint colocation add  master  ms_MySQL with writer_vip
 
+
 pcs constraint order promote ms_MySQL then start writer_vip
 
 ================================================================
@@ -107,3 +108,18 @@ pcs resource master ms_MySQL p_mysql
 pcs constraint colocation add  master  ms_MySQL with writer_vip
 pcs resource op add  p_mysql monitor interval="5s" role="Master" OCF_CHECK_LEVEL="1"
 pcs resource op add  p_mysql monitor interval="2s" role="Slave" OCF_CHECK_LEVEL="1"
+
+
+
+=========================================
+백업본으로 DB복구후
+CLUSTER에 CHANGER MASTER정보를 제공
+
+crm_attribute --node LGEDITMS02V --name LGEDITMS01V-log-file-p_mysql -v mariadb-bin.000093
+crm_attribute --node LGEDITMS02V --name LGEDITMS01V-log-pos-p_mysql -v 11783432  
+
+DB복구후 DB기동은 위 SCRIPT를 수행하여 복구대상 CLUSTER NODE에게 정보 제공후
+해당 CLUSTER 정보 CLEANUP 혹은 UNSTANDBY 필요
+========================================================================
+
+
