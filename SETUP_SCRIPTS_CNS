@@ -74,6 +74,8 @@ pcs constraint colocation add  master  ms_MySQL with writer_vip
 
 
 pcs constraint order promote ms_MySQL then start writer_vip
+pcs constraint order promote ms_MySQL then start reader_vip    (<== slave못올라올경우 reader_vip 는 master에 그대로 있어야함, slave db 기동후 vip promote)
+
 
 ================================================================
 PERCONA 
