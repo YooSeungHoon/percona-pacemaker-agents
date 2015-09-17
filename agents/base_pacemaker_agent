@@ -616,8 +616,8 @@ unset_master(){
     rm -f $tmpfile
 
     ocf_run $MYSQL $mysql_options \
-#       -e "RESET SLAVE ALL;"
-       -e "CHANGE MASTER TO MASTER_HOST=' '"
+       -e "RESET SLAVE ALL;"
+#       -e "CHANGE MASTER TO MASTER_HOST=' '"
     if [ $? -gt 0 ]; then
             ocf_log err "Failed to set master"
             exit $OCF_ERR_GENERIC
