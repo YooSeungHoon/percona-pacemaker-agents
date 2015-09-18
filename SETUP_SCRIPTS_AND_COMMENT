@@ -113,10 +113,11 @@ pcs resource op add  p_mysql monitor interval="2s" role="Slave" OCF_CHECK_LEVEL=
 
 
 ====================================================
-[pacemaker의 동작과련1]
+[pacemaker의 동작과련]
 
 * slave-> master 승격 : 이때 slave 정보를 pacemaker에 등록한다
 * master -> slave : change master수행후 pacemaker정보를 지우고 start slave수행됨다
+* 수동으로 change master수행시 master_host는 반드시 hostname으로 명시한다 (사전에 /etc/hosts 파일에 m/s구성 서버 모두 등록)
 
 1. pcs config 수행시 맨밑의 node attribute는 Masternode가 slave였을때의 show slave status의 결과값이다
 
