@@ -112,6 +112,32 @@ pcs resource op add  p_mysql monitor interval="5s" role="Master" OCF_CHECK_LEVEL
 pcs resource op add  p_mysql monitor interval="2s" role="Slave" OCF_CHECK_LEVEL="1"
 
 
+====================================================
+[pacemaker의 동작과련1]
+
+* slave-> master 승격 : 이때 slave 정보를 pacemaker에 등록한다
+* master -> slave : change master수행후 pacemaker정보를 지우고 start slave수행됨다
+
+1. pcs config 수행시 맨밑의 node attribute는 Masternode가 slave였을때의 show slave status의 결과값이다
+
+(예) LGEDITMS01V서버가 현재 master이고 slave일때 상태정보
+Node Attributes:
+ LGEDITMS01V: LGEDITMS02V-log-file-p_mysql=mariadb-bin.000008 LGEDITMS02V-log-pos-p_mysql=328
+
+2. node attribute가 2line으로 2개 node정보가 모두인경우는 아래와 같은 상황이다
+   한node가 master이며 한node는 stop인상황
+   즉, master가 slave로 승격전 stop상태일때 아직 slave로 되지 않아 정보가 남아있는상황
+   stop => slave로 빠지면 해당 노드의 node attribute는 삭제된다
+   
+3. M/S구성에서 M NODE백업을 이용해서 M가 죽었을때 신규M에 S로 붙이는 법
+  : M백업본을 복구하고 CHANGE MASTER시 CRM_ATTR이용하요 기존 M의 NODE ATTRIBUTE(PACEMAKER정보:PCS CONFIG)의 
+    FILE,POS로 기입하여 S로 복구 수행
+    
+4. M/S구성에서 M백업을 활용해 S구성 혹은 복구하기
+   M의 백업본에 Xtrabackup_bin_info 정보의 file,pos정보를 가지고 crm_attr이용해 slave cluster를 start하여 s로 구성
+   이후 pcs config확인하여 s의 node attr정보를 삭제
+   
+
 
 =========================================
 백업본으로 DB복구후
@@ -122,6 +148,13 @@ crm_attribute --node LGEDITMS02V --name LGEDITMS01V-log-pos-p_mysql -v 11783432
 
 DB복구후 DB기동은 위 SCRIPT를 수행하여 복구대상 CLUSTER NODE에게 정보 제공후
 해당 CLUSTER 정보 CLEANUP 혹은 UNSTANDBY 필요
+
+이후 SLAVE NODE의 NODE ATTRRIBUTE(CHANGE MASTER정보는 삭제해야함)
+
+예: 
+
+crm_attribute --node LGEDITMS02V --name LGEDITMS01V-log-file-p_mysql --delete
+crm_attribute --node LGEDITMS02V --name LGEDITMS01V-log-pos-p_mysql --delete
 ========================================================================
 
 
