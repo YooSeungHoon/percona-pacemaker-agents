@@ -39,7 +39,8 @@ ccs_config_validate -f /etc/cluster/cluster.conf
 ============================
 PACEMAKER RESOURCE MANAGER BASIC
 ============================
-primitive p_mysql ocf:heartbeat:mysql \
+(crs명령어시)
+crs primitive p_mysql ocf:heartbeat:mysql \
   params binary="/usr/sbin/mysqld" \
   op start timeout="120" \
   op stop timeout="120" \
@@ -50,6 +51,7 @@ primitive p_mysql ocf:heartbeat:mysql \
 ms ms_mysql p_mysql \
   meta clone-max=3
 
+(pcs명령어시: 권장)
 pcs resource create p_maria mysql params config=/maria/my.cnf client_binary=/maria/bin/mysql datadir=/maria/data pid=/maria/data/mysqld.pid socket=/maria/data/mysqld.sock replication_user=root replication_passwd=root01 user=mysql group=dba  max_slave_lag=60 evict_outdated_slaves=false binary=/maria/bin/mysqld test_user=root test_passwd=root01 log=/maria/data/mysqld.err \
   op start timeout="120" \
   op stop timeout="120" \
