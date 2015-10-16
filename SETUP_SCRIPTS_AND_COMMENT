@@ -161,3 +161,182 @@ crm_attribute --node LGEDITMS02V --name LGEDITMS01V-log-pos-p_mysql --delete
 ========================================================================
 
 
+=====================
+참고
+======================
+1.yum 세팅(되있으면 생략)
+- image 옮기고(/root/rhel_image)
+- /etc/yum.repos.d/rhel_6.6.repo 
+[redhatimage]
+name=REDHAT DVD ISO
+baseurl=file:///root/rhel_image
+enabled=1
+gpgcheck=1
+gpgkey=file:///root/rhel_image/RPM-GPG-KEY-redhat-release
+
+
+[HighAvailability]
+name=Red Hat Enterprise Linux 6.6 - HighAvailability
+metadata_expire=-1
+gpgcheck=0
+cost=500
+enabled=1
+baseurl=file:///root/rhel_image/HighAvailability
+gpgkey=file:///root/rhel_image/RPM-GPG-KEY-redhat-release
+
+
+2. yum install corosync pacemaker pcs cman ccs resource-agents
+2. 클러스터용 쉘 프로그램인 crmsh를 추가로 설치하고 (Optional)
+# yum -y install redhat-rpm-config 
+# rpm -ivh python-pssh-2.3.1-4.2.x86_64.rpm
+# rpm -ivh pssh-2.3.1-15.1.x86_64.rpm 
+# rpm -ivh crmsh-2.0+git5-1.1.x86_64.rpm
+
+
+3./etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+192.168.55.178 LCNDOBOTP01 lcndobotp01
+192.168.55.179 LCNDOBOTP02 lcndobotp02
+
+4. /etc/corosync/corosync.conf 설정
+compatibility: whitetank
+
+totem {
+        version: 2
+        secauth: on
+        window_size: 500
+
+        threads: 0
+
+        interface {
+                ringnumber: 0
+                bindnetaddr: 10.0.10.0     <- heartbeat 대역, 없으면 public 서버 IP 대역 사용
+                mcastaddr: 226.94.5.1
+                mcastport: 5405
+                ttl: 64
+        }
+}
+
+logging {
+        fileline: off
+        to_stderr: no
+        to_logfile: yes
+        logfile: /var/log/cluster/corosync.log
+        to_syslog: yes
+        debug: off
+        timestamp: on
+        logger_subsys {
+                subsys: AMF
+                debug: off
+        }
+}
+
+amf {
+        mode: disabled
+}
+
+4. corosync-keygen으로 authkey 생성
+while /bin/true; do dd if=/dev/urandom of=/tmp/100 bs=1024 count=100000; for i in {1..10}; do cp /tmp/100 /tmp/tmp_$i_$RANDOM; done; rm -f /tmp/tmp_* /tmp/100; done & /usr/sbin/corosync-keygen
+
+5. 클러스터 설정파일 세팅(호스트명으로 ~)
+ccs -f /etc/cluster/cluster.conf --createcluster tmasterdb
+
+ccs -f /etc/cluster/cluster.conf --addnode LCNDOBOTP01
+ccs -f /etc/cluster/cluster.conf --addnode LCNDOBOTP02
+
+ccs -f /etc/cluster/cluster.conf --addmethod pcmk-redirect LCNDOBOTP01 
+ccs -f /etc/cluster/cluster.conf --addmethod pcmk-redirect LCNDOBOTP02
+
+ccs -f /etc/cluster/cluster.conf --addfencedev pcmk agent=fence_pcmk
+
+ccs -f /etc/cluster/cluster.conf --addfenceinst pcmk LCNDOBOTP01 pcmk-redirect port=LCNDOBOTP01
+ccs -f /etc/cluster/cluster.conf --addfenceinst pcmk LCNDOBOTP02 pcmk-redirect port=LCNDOBOTP02
+
+ccs -f /etc/cluster/cluster.conf --setcman keyfile="/etc/corosync/authkey" transport="udpu"
+ccs_config_validate -f /etc/cluster/cluster.conf
+
+6. 파일삭제(양쪽)
+rm -rf /var/lib/pacemaker/cib/*
+rm -rf /var/lib/pacemaker/pengine/*
+
+7. 기동(양쪽DB)
+scp로 cluster.conf DB2에 옮김
+service cman start
+service pacemaker start
+
+
+10. 한쪽서버
+pcs property set stonith-enabled=false
+crm_attribute --attr-name no-quorum-policy --attr-value ignore
+crm_attribute --attr-name stonith-enabled --attr-value false
+
+11. RESOURCE AGENT 파일 옮기기(권한줄것+x)
+cp /usr/lib/ocf/resource.d/heartbeat/mysql /usr/lib/ocf/resource.d/heartbeat/mysql.backup
+chmod +x /usr/lib/ocf/resource.d/heartbeat/mysql
+/usr/lib/ocf/resource.d/heartbeat/mysql 로 변경(유K 깃허브)
+
+
+12. /usr/lib/ocf/resource.d/heartbeat/mysql 현행화.. 
+( 변경 후 touch mysql)
+
+13. PCS 설정(db기동되있어야함,master-slave)
+- DB관련 복제유저의 경우 권한
+grant SUPER, REPLICATION SLAVE, REPLICATION CLIENT, PROCESS, RELOAD ON *.* TO 'repl'@'localhost' identified by 'dlatl00';
+
+- DB테스트용 유저
+grant select ON mysql.user to test_user@'localhost' identified by 'dlatl00';
+
+
+pcs resource create p_maria mysql params config=/etc/my.cnf client_binary=/engn001/maria/mariadb-10.0.21/bin/mysql \
+  datadir=/data001/maria/data pid=/data001/maria/data/mysqld.pid socket=/data001/maria/data/mysqld.sock replication_user=repl replication_passwd="dlatl00" \
+  user=mariasvc01 group=mariasvc  max_slave_lag=60 evict_outdated_slaves=false binary=/engn001/maria/mariadb-10.0.21/bin/mysqld test_user=test_user test_passwd="dlatl00" log=/logs001/maria/error/mysqld.err \
+  op start timeout="120" \
+  op stop timeout="120" \
+  op promote timeout="120" \
+  op demote timeout="120" \
+  op monitor role="Master" timeout="30" interval="10" \
+  op monitor role="Slave" timeout="30" interval="10"
+
+
+pcs resource master ms_MySQL p_maria
+pcs resource update ms_MySQL master-max="1" master-node-max="1" clone-max="2" clone-node-max="1" notify="true" globally-unique="false" target-role="Master" is-managed="true"
+
+pcs resource op add p_maria monitor interval="10s" role="Master" OCF_CHECK_LEVEL="1" on-fail="standby"
+
+pcs resource op add p_maria monitor interval="2s" role="Slave" OCF_CHECK_LEVEL="1" on-fail="standby"
+
+pcs config 조회 후 불필요한 pcs resource op remove motinor 삭제
+
+
+* writer vip 설정
+pcs resource create writer_vip ocf:heartbeat:IPaddr2 \
+      ip="192.168.55.191" nic="eth0:1" \
+      op monitor interval="10s"
+
+pcs constraint colocation add  master  ms_MySQL with writer_vip
+
+pcs constraint order promote ms_MySQL then start writer_vip
+
+
+
+-- 기타
+crm_attribute --node LCNDOBOTP02 --name LCNDOBOTP01-log-file-p_maria -v mariadb-bin.000038 
+crm_attribute --node LCNDOBOTP02 --name LCNDOBOTP01-log-pos-p_maria -v 328
+crm_attribute --node LCNDOBOTP01 --name LCNDOBOTP01-log-file-p_maria --delete 
+crm_attribute --node LCNDOBOTP01 --name LCNDOBOTP01-log-pos-p_maria --delete 
+
+-- 상태확인
+pcs config (slave가 master 됐을때 master는 slave의 binlog 정보를 지님, 추후 standby 시 정보를 이용)
+pcs status
+pcs resource cleanup p_maria
+pcs cluster standby LCNDOBOTP02
+pcs cluster unstandby LCNDOBOTP02
+pcs resource delete ms_MySQL
+pcs resource op remove (Mornitor불필요항목제거)
+pcs cluster edit (export EDITOR=/bin/vi)
+
+service cman status
+service pacemaker status
+cman_tool nodes -a
