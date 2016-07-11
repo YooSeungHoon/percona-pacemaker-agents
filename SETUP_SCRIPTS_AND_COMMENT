@@ -315,7 +315,8 @@ pcs resource create writer_vip ocf:heartbeat:IPaddr2 \
       ip="192.168.55.191" nic="eth0:1" \
       op monitor interval="10s"
 
-pcs constraint colocation add  master  ms_MySQL with writer_vip
+-- pcs constraint colocation add  master  ms_MySQL with writer_vip
+pcs constraint colocation add writer_vip with master ms_MySQL  (2016/07/11수정)
 
 pcs constraint order promote ms_MySQL then start writer_vip
 
