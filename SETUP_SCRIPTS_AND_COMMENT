@@ -311,7 +311,7 @@ pcs resource op add p_maria monitor interval="2s" role="Slave" OCF_CHECK_LEVEL="
 pcs config 조회 후 불필요한 pcs resource op remove motinor 삭제
 
 
-* writer vip 설정 (반드시 public ip와 다른 eth 설정할것, public이 eht1 이면 vip는 eth2로한다)
+* writer vip 설정 
 pcs resource create writer_vip ocf:heartbeat:IPaddr2 \
       ip="192.168.55.191" nic="eth0:1" \
       op monitor interval="10s"
